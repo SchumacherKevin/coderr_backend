@@ -64,3 +64,56 @@ class RegistrationTests(APITestCase):
         response = self.client.post(self.url, self.payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(UserProfile.objects.exists())
+
+
+class LoginTests(APITestCase):
+    """Tests for POST /api/login/."""
+
+    def setUp(self):
+        """Create a user with token and prepare the URL and payload."""
+        self.url = reverse('login')
+        self.user = User.objects.create_user(
+            username='max', email='max@mail.de', password='Secret123!'
+        )
+        self.token = Token.objects.create(user=self.user)
+        self.payload = {'username': 'max', 'password': 'Secret123!'}
+
+    def test_login_success(self):
+        """Valid credentials return 200 with token and user data."""
+        response = self.client.post(self.url, self.payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {
+            'token': self.token.key,
+            'username': 'max',
+            'email': 'max@mail.de',
+            'user_id': self.user.pk,
+        })
+
+    def test_login_creates_missing_token(self):
+        """A user without token gets a new one on login."""
+        self.token.delete()
+        response = self.client.post(self.url, self.payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        new_token = Token.objects.get(user=self.user)
+        self.assertEqual(response.data['token'], new_token.key)
+
+    def test_wrong_password(self):
+        """A wrong password returns 400."""
+        self.payload['password'] = 'Wrong123!'
+        self.assert_bad_request()
+
+    def test_unknown_user(self):
+        """An unknown username returns 400."""
+        self.payload['username'] = 'nobody'
+        self.assert_bad_request()
+
+    def test_missing_field(self):
+        """A missing password returns 400."""
+        del self.payload['password']
+        self.assert_bad_request()
+
+    def assert_bad_request(self):
+        """Post the payload and expect 400 without a token in the response."""
+        response = self.client.post(self.url, self.payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn('token', response.data)
