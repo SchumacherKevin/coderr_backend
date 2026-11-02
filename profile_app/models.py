@@ -25,7 +25,6 @@ class UserProfile(models.Model):
         verbose_name = 'User profile'
         verbose_name_plural = 'User profiles'
 
-    """String representation of the user profile."""
-
     def __str__(self):
+        """String representation of the user profile."""
         return f'{self.user.username} ({self.type})'

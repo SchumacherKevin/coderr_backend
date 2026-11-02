@@ -1,3 +1,7 @@
-"""URL routes for the auth_app API."""
+from django.urls import path
 
-urlpatterns = []
+from .views import RegistrationView
+
+urlpatterns = [
+    path('registration/', RegistrationView.as_view(), name='registration'),
+]
