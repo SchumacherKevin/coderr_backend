@@ -1,3 +1,4 @@
+"""Serializers for the auth_app API."""
 from django.contrib.auth.models import User
 from django.db import transaction
 from rest_framework import serializers
