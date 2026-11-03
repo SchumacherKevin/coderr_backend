@@ -1,11 +1,19 @@
-"""Tests for the auth_app API endpoints."""
+"""Tests for the auth_app API endpoints and commands."""
+from io import StringIO
+
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from profile_app.models import UserProfile
+
+GUESTS = [
+    ('andrey', 'asdasd', 'customer'),
+    ('kevin', 'asdasd24', 'business'),
+]
 
 
 class RegistrationTests(APITestCase):
@@ -118,3 +126,45 @@ class LoginTests(APITestCase):
         response = self.client.post(self.url, self.payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertNotIn('token', response.data)
+
+
+class GuestUserCommandTests(APITestCase):
+    """Tests for the create_guest_users management command."""
+
+    def run_command(self):
+        """Run the command without printing to the console."""
+        call_command('create_guest_users', stdout=StringIO())
+
+    def test_creates_both_guest_users(self):
+        """The command creates both guests with profile, password and token."""
+        self.run_command()
+        for username, password, profile_type in GUESTS:
+            user = User.objects.get(username=username)
+            self.assertTrue(user.check_password(password))
+            self.assertEqual(user.profile.type, profile_type)
+            self.assertTrue(Token.objects.filter(user=user).exists())
+
+    def test_command_is_idempotent(self):
+        """Running the command twice does not create duplicates."""
+        self.run_command()
+        self.run_command()
+        self.assertEqual(User.objects.count(), 2)
+        self.assertEqual(UserProfile.objects.count(), 2)
+
+    def test_resets_changed_password(self):
+        """An existing guest gets the expected password back."""
+        User.objects.create_user(username='andrey', password='changed')
+        self.run_command()
+        user = User.objects.get(username='andrey')
+        self.assertTrue(user.check_password('asdasd'))
+        self.assertEqual(user.profile.type, 'customer')
+
+    def test_guest_can_log_in(self):
+        """The frontend guest credentials work on the login endpoint."""
+        self.run_command()
+        for username, password, _ in GUESTS:
+            payload = {'username': username, 'password': password}
+            response = self.client.post(
+                reverse('login'), payload, format='json'
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)

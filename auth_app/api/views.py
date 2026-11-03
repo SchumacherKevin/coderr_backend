@@ -1,3 +1,4 @@
+"""Views for the auth_app API."""
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
