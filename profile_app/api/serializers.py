@@ -1,5 +1,6 @@
 """Serializers for the profile_app API."""
 from django.contrib.auth.models import User
+from django.db import transaction
 from rest_framework import serializers
 
 from profile_app.models import UserProfile
@@ -31,10 +32,16 @@ class ProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('This email is already in use.')
         return value
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         """Save the user fields on the user and the rest on the profile."""
         user_data = validated_data.pop('user', {})
-        for attr, value in user_data.items():
-            setattr(instance.user, attr, value)
-        instance.user.save()
+        self.update_user(instance.user, user_data)
         return super().update(instance, validated_data)
+
+    def update_user(self, user, user_data):
+        """Write first_name, last_name and email onto the Django user."""
+        for attr, value in user_data.items():
+            setattr(user, attr, value)
+        if user_data:
+            user.save(update_fields=list(user_data))
