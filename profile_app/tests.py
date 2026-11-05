@@ -161,6 +161,8 @@ class ProfileUpdateTests(ProfileTestBase):
         url = self.profile_url(9999)
         response = self.client.patch(url, {'tel': '1'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
 BUSINESS_LIST_FIELDS = {
     'user', 'username', 'first_name', 'last_name', 'file', 'location',
     'tel', 'description', 'working_hours', 'type',

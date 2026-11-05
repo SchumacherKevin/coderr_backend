@@ -47,13 +47,17 @@ class ProfileSerializer(serializers.ModelSerializer):
             user.save(update_fields=list(user_data))
 
 
-class BusinessProfileListSerializer(serializers.ModelSerializer):
-    """Business profile as shown in the business list."""
+class ProfileListSerializer(serializers.ModelSerializer):
+    """Read-only user fields shared by both profile lists."""
 
     username = serializers.CharField(source='user.username', read_only=True)
     first_name = serializers.CharField(
         source='user.first_name', read_only=True)
     last_name = serializers.CharField(source='user.last_name', read_only=True)
+
+
+class BusinessProfileListSerializer(ProfileListSerializer):
+    """Business profile as shown in the business list."""
 
     class Meta:
         model = UserProfile
@@ -63,13 +67,9 @@ class BusinessProfileListSerializer(serializers.ModelSerializer):
         ]
 
 
-class CustomerProfileListSerializer(serializers.ModelSerializer):
+class CustomerProfileListSerializer(ProfileListSerializer):
     """Customer profile as shown in the customer list."""
 
-    username = serializers.CharField(source='user.username', read_only=True)
-    first_name = serializers.CharField(
-        source='user.first_name', read_only=True)
-    last_name = serializers.CharField(source='user.last_name', read_only=True)
     uploaded_at = serializers.DateTimeField(
         source='created_at', read_only=True)
 

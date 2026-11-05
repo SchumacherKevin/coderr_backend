@@ -23,19 +23,27 @@ class ProfileDetailView(RetrieveUpdateAPIView):
     http_method_names = ['get', 'patch', 'head', 'options']
 
 
-class BusinessProfileListView(ListAPIView):
+class ProfileListView(ListAPIView):
+    """Base view: list all profiles of the type set in profile_type."""
+
+    permission_classes = [IsAuthenticated]
+    profile_type = None
+
+    def get_queryset(self):
+        """Return only profiles of this view's type, with their user."""
+        return UserProfile.objects.filter(
+            type=self.profile_type).select_related('user')
+
+
+class BusinessProfileListView(ProfileListView):
     """List all business profiles."""
 
-    queryset = UserProfile.objects.filter(
-        type=UserProfile.ProfileType.BUSINESS).select_related('user')
+    profile_type = UserProfile.ProfileType.BUSINESS
     serializer_class = BusinessProfileListSerializer
-    permission_classes = [IsAuthenticated]
 
 
-class CustomerProfileListView(ListAPIView):
+class CustomerProfileListView(ProfileListView):
     """List all customer profiles."""
 
-    queryset = UserProfile.objects.filter(
-        type=UserProfile.ProfileType.CUSTOMER).select_related('user')
+    profile_type = UserProfile.ProfileType.CUSTOMER
     serializer_class = CustomerProfileListSerializer
-    permission_classes = [IsAuthenticated]
