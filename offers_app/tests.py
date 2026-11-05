@@ -8,18 +8,24 @@ from django.test import TestCase
 from offers_app.models import Offer, OfferDetail
 
 
+def create_detail(offer, offer_type='basic', **fields):
+    """Create one offer detail, values not passed get a default."""
+    defaults = {
+        'title': f'{offer_type} Design', 'revisions': 2,
+        'delivery_time_in_days': 5, 'price': 100,
+    }
+    defaults.update(fields)
+    return OfferDetail.objects.create(
+        offer=offer, offer_type=offer_type, **defaults)
+
+
 def create_offer(user, title='Website Design'):
     """Create an offer with the three detail types basic, standard, premium."""
     offer = Offer.objects.create(
         user=user, title=title, description='Professionelles Design')
-    for offer_type, price, days in (
-        ('basic', 100, 5), ('standard', 200, 7), ('premium', 500, 10),
-    ):
-        OfferDetail.objects.create(
-            offer=offer, title=f'{offer_type} Design', revisions=2,
-            delivery_time_in_days=days, price=price,
-            features=['Logo Design'], offer_type=offer_type,
-        )
+    create_detail(offer, 'basic', features=['Logo Design'])
+    create_detail(offer, 'standard', price=200, delivery_time_in_days=7)
+    create_detail(offer, 'premium', price=500, delivery_time_in_days=10)
     return offer
 
 
@@ -57,9 +63,7 @@ class OfferModelTests(TestCase):
     def test_detail_features_default_to_empty_list(self):
         """Without features the field is an empty list, never null."""
         offer = Offer.objects.create(user=self.user, title='Logo')
-        detail = OfferDetail.objects.create(
-            offer=offer, title='Basic', revisions=1,
-            delivery_time_in_days=3, price=50, offer_type='basic')
+        detail = create_detail(offer)
         self.assertEqual(detail.features, [])
 
     def test_unlimited_revisions_allowed(self):
@@ -73,9 +77,7 @@ class OfferModelTests(TestCase):
     def test_offer_type_unique_per_offer(self):
         """An offer cannot have two details with the same offer_type."""
         with self.assertRaises(IntegrityError):
-            OfferDetail.objects.create(
-                offer=self.offer, title='Second basic', revisions=1,
-                delivery_time_in_days=1, price=10, offer_type='basic')
+            create_detail(self.offer, 'basic')
 
     def test_same_offer_type_in_different_offers(self):
         """Two different offers may both have a basic detail."""
