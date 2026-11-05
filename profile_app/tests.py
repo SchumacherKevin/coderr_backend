@@ -161,3 +161,76 @@ class ProfileUpdateTests(ProfileTestBase):
         url = self.profile_url(9999)
         response = self.client.patch(url, {'tel': '1'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+BUSINESS_LIST_FIELDS = {
+    'user', 'username', 'first_name', 'last_name', 'file', 'location',
+    'tel', 'description', 'working_hours', 'type',
+}
+CUSTOMER_LIST_FIELDS = {
+    'user', 'username', 'first_name', 'last_name', 'file', 'uploaded_at',
+    'type',
+}
+
+
+class ProfileListTests(APITestCase):
+    """Tests for GET /api/profiles/business/ and /api/profiles/customer/."""
+
+    def setUp(self):
+        """Create two business users and one customer, log in as customer."""
+        self.business = create_user_with_profile('max', 'business')
+        create_user_with_profile('lisa', 'business')
+        self.customer = create_user_with_profile('anna', 'customer')
+        self.business_url = reverse('business-profile-list')
+        self.customer_url = reverse('customer-profile-list')
+        self.client.force_authenticate(user=self.customer)
+
+    def test_business_list_contains_only_business_profiles(self):
+        """The business list returns all business profiles and no others."""
+        response = self.client.get(self.business_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+        usernames = {profile['username'] for profile in response.data}
+        self.assertEqual(usernames, {'max', 'lisa'})
+
+    def test_business_list_fields(self):
+        """Each business entry has exactly the documented fields."""
+        response = self.client.get(self.business_url)
+        for profile in response.data:
+            self.assertEqual(set(profile), BUSINESS_LIST_FIELDS)
+            self.assertEqual(profile['type'], 'business')
+
+    def test_business_list_empty_fields_are_strings(self):
+        """Empty text fields in the business list are '' and never null."""
+        response = self.client.get(self.business_url)
+        for field in STRING_FIELDS:
+            self.assertEqual(response.data[0][field], '', field)
+
+    def test_customer_list_contains_only_customer_profiles(self):
+        """The customer list returns all customer profiles and no others."""
+        response = self.client.get(self.customer_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+        usernames = [profile['username'] for profile in response.data]
+        self.assertEqual(usernames, ['anna'])
+
+    def test_customer_list_fields(self):
+        """Each customer entry has exactly the documented fields."""
+        response = self.client.get(self.customer_url)
+        profile = response.data[0]
+        self.assertEqual(set(profile), CUSTOMER_LIST_FIELDS)
+        self.assertEqual(profile['user'], self.customer.pk)
+        self.assertEqual(profile['type'], 'customer')
+        self.assertEqual(profile['first_name'], '')
+        self.assertEqual(profile['last_name'], '')
+        self.assertIsNotNone(profile['uploaded_at'])
+
+    def test_business_list_unauthenticated(self):
+        """Anonymous users get 401 for the business list."""
+        self.client.force_authenticate(user=None)
+        response = self.client.get(self.business_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_customer_list_unauthenticated(self):
+        """Anonymous users get 401 for the customer list."""
+        self.client.force_authenticate(user=None)
+        response = self.client.get(self.customer_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
