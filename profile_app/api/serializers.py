@@ -45,3 +45,37 @@ class ProfileSerializer(serializers.ModelSerializer):
             setattr(user, attr, value)
         if user_data:
             user.save(update_fields=list(user_data))
+
+
+class BusinessProfileListSerializer(serializers.ModelSerializer):
+    """Business profile as shown in the business list."""
+
+    username = serializers.CharField(source='user.username', read_only=True)
+    first_name = serializers.CharField(
+        source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            'user', 'username', 'first_name', 'last_name', 'file',
+            'location', 'tel', 'description', 'working_hours', 'type',
+        ]
+
+
+class CustomerProfileListSerializer(serializers.ModelSerializer):
+    """Customer profile as shown in the customer list."""
+
+    username = serializers.CharField(source='user.username', read_only=True)
+    first_name = serializers.CharField(
+        source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+    uploaded_at = serializers.DateTimeField(
+        source='created_at', read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            'user', 'username', 'first_name', 'last_name', 'file',
+            'uploaded_at', 'type',
+        ]
