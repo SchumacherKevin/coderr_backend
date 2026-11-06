@@ -1,6 +1,7 @@
 """Serializers for the reviews_app API."""
 from rest_framework import serializers
 
+from core.serializers import RejectUnknownFieldsMixin
 from profile_app.models import UserProfile
 from reviews_app.models import Review
 
@@ -34,20 +35,13 @@ class ReviewSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class ReviewUpdateSerializer(serializers.ModelSerializer):
+class ReviewUpdateSerializer(RejectUnknownFieldsMixin,
+                             serializers.ModelSerializer):
     """Change only rating and description of a review."""
 
     class Meta:
         model = Review
         fields = ['rating', 'description']
-
-    def validate(self, attrs):
-        """Reject any field other than rating and description."""
-        unknown = set(self.initial_data) - set(self.Meta.fields)
-        if unknown:
-            raise serializers.ValidationError(
-                {field: 'This field cannot be changed.' for field in unknown})
-        return attrs
 
     def to_representation(self, instance):
         """Return the updated review with all its fields."""

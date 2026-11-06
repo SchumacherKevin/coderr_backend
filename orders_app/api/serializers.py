@@ -2,6 +2,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 
+from core.serializers import RejectUnknownFieldsMixin
 from offers_app.models import OfferDetail
 from orders_app.models import Order
 
@@ -47,7 +48,7 @@ class OrderCreateSerializer(FullOrderResponseMixin, serializers.Serializer):
             business_user=detail.offer.user, **copied)
 
 
-class OrderStatusSerializer(FullOrderResponseMixin,
+class OrderStatusSerializer(FullOrderResponseMixin, RejectUnknownFieldsMixin,
                             serializers.ModelSerializer):
     """Change only the status of an order."""
 
@@ -56,11 +57,8 @@ class OrderStatusSerializer(FullOrderResponseMixin,
         fields = ['status']
 
     def validate(self, attrs):
-        """Reject a missing status and any field other than status."""
-        unknown = set(self.initial_data) - {'status'}
-        if unknown:
-            raise serializers.ValidationError(
-                {field: 'This field cannot be changed.' for field in unknown})
+        """Reject other fields and a missing status."""
+        attrs = super().validate(attrs)
         if 'status' not in attrs:
             raise serializers.ValidationError(
                 {'status': 'This field is required.'})
