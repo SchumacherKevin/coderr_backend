@@ -156,4 +156,6 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
+    # Preise als Zahl statt als String ausgeben (wie in der Endpoint-Doku)
+    'COERCE_DECIMAL_TO_STRING': False,
 }

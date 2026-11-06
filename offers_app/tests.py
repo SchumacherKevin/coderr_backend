@@ -1,10 +1,12 @@
 """Tests for the offers_app models and API endpoints."""
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -139,6 +141,8 @@ class OfferListTests(APITestCase):
         self.logo = create_offer(self.lisa, 'Logo', 'Schnelles Logo')
         self.logo.details.filter(offer_type='basic').update(
             price=50, delivery_time_in_days=2)
+        yesterday = timezone.now() - timedelta(days=1)
+        Offer.objects.filter(pk=self.website.pk).update(updated_at=yesterday)
 
     def get_ids(self, params=None):
         """Request the list and return the IDs of the results."""
