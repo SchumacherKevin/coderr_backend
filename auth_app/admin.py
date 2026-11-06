@@ -1,3 +1,4 @@
-from django.contrib import admin
+"""auth_app has no models, so it registers nothing in the admin.
 
-# Register your models here.
+Users are managed by Django's user admin, profiles by profile_app.
+"""

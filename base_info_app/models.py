@@ -1,3 +1,4 @@
-from django.db import models
+"""base_info_app has no models of its own.
 
-# Create your models here.
+It only aggregates offers, profiles and reviews of the other apps.
+"""

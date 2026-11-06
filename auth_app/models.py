@@ -1,3 +1,4 @@
-from django.db import models
+"""auth_app has no models of its own.
 
-# Create your models here.
+It uses Django's User and the UserProfile model of profile_app.
+"""
