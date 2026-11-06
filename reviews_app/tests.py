@@ -25,6 +25,11 @@ def create_review(business_user, reviewer, rating=4, **fields):
         description=fields.pop('description', 'Alles war toll!'), **fields)
 
 
+def review_url(pk):
+    """Return the URL of a single review."""
+    return reverse('review-detail', kwargs={'pk': pk})
+
+
 class ReviewModelTests(TestCase):
     """Tests for the Review model."""
 
@@ -228,3 +233,99 @@ class ReviewCreateTests(ReviewTestBase):
         self.client.force_authenticate(user=None)
         response = self.post()
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class ReviewSingleTestBase(ReviewTestBase):
+    """Shared setup: a review of anna for max."""
+
+    def setUp(self):
+        """Create the review, anna stays logged in."""
+        super().setUp()
+        self.review = create_review(self.business, self.customer)
+        self.url = review_url(self.review.pk)
+
+    def login_as_other_customer(self):
+        """Log in as a customer who did not write the review."""
+        self.client.force_authenticate(user=self.other_customer)
+
+
+class ReviewUpdateTests(ReviewSingleTestBase):
+    """Tests for PATCH /api/reviews/{id}/."""
+
+    def patch(self, data, url=None):
+        """Send the changes as JSON."""
+        return self.client.patch(url or self.url, data, format='json')
+
+    def test_reviewer_updates_review(self):
+        """The reviewer changes rating and description."""
+        response = self.patch(
+            {'rating': 5, 'description': 'Noch besser als erwartet!'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(response.data), REVIEW_FIELDS)
+        self.review.refresh_from_db()
+        self.assertEqual(self.review.rating, 5)
+        self.assertEqual(self.review.description, 'Noch besser als erwartet!')
+
+    def test_patch_only_description(self):
+        """Fields that are not sent stay unchanged."""
+        self.patch({'description': 'Kurz'})
+        self.review.refresh_from_db()
+        self.assertEqual(self.review.rating, 4)
+
+    def test_patch_other_fields(self):
+        """Only rating and description may be changed."""
+        response = self.patch(
+            {'rating': 5, 'business_user': self.other_business.pk})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.review.refresh_from_db()
+        self.assertEqual(self.review.business_user, self.business)
+
+    def test_patch_invalid_rating(self):
+        """The rating must stay between 1 and 5."""
+        response = self.patch({'rating': 9})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_other_users_review(self):
+        """Only the reviewer may change the review."""
+        self.login_as_other_customer()
+        response = self.patch({'rating': 1})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_patch_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.patch({'rating': 1})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_patch_unknown_review(self):
+        """An unknown ID returns 404."""
+        response = self.patch({'rating': 1}, review_url(999))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class ReviewDeleteTests(ReviewSingleTestBase):
+    """Tests for DELETE /api/reviews/{id}/."""
+
+    def test_reviewer_deletes_review(self):
+        """The reviewer deletes the review."""
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(Review.objects.count(), 0)
+
+    def test_delete_other_users_review(self):
+        """Only the reviewer may delete the review."""
+        self.login_as_other_customer()
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Review.objects.count(), 1)
+
+    def test_delete_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_delete_unknown_review(self):
+        """An unknown ID returns 404."""
+        response = self.client.delete(review_url(999))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
