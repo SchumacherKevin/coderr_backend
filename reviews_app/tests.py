@@ -1,10 +1,21 @@
-"""Tests for the reviews_app models."""
+"""Tests for the reviews_app models and API endpoints."""
+from datetime import timedelta
+
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from offers_app.tests import create_user
 from reviews_app.models import Review
+
+REVIEW_FIELDS = {
+    'id', 'business_user', 'reviewer', 'rating', 'description',
+    'created_at', 'updated_at',
+}
 
 
 def create_review(business_user, reviewer, rating=4, **fields):
@@ -76,3 +87,144 @@ class ReviewModelTests(TestCase):
     def test_str(self):
         """Readable name for the admin."""
         self.assertEqual(str(self.review), 'anna -> max (4)')
+
+
+class ReviewTestBase(APITestCase):
+    """Shared setup: two business users and two customers."""
+
+    def setUp(self):
+        """Create the users and log in as the customer anna."""
+        self.business = create_user('max')
+        self.other_business = create_user('lisa')
+        self.customer = create_user('anna', 'customer')
+        self.other_customer = create_user('tom', 'customer')
+        self.list_url = reverse('review-list')
+        self.client.force_authenticate(user=self.customer)
+
+
+class ReviewListTests(ReviewTestBase):
+    """Tests for GET /api/reviews/."""
+
+    def setUp(self):
+        """Create three reviews with different ratings and dates."""
+        super().setUp()
+        self.old = create_review(self.business, self.customer, rating=5)
+        self.middle = create_review(self.other_business, self.customer, 2)
+        self.new = create_review(self.business, self.other_customer, 3)
+        for days, review in enumerate([self.new, self.middle, self.old]):
+            Review.objects.filter(pk=review.pk).update(
+                updated_at=timezone.now() - timedelta(days=days))
+
+    def get_ids(self, params=None):
+        """Request the list and return the IDs of the reviews."""
+        response = self.client.get(self.list_url, params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return [review['id'] for review in response.data]
+
+    def test_list_all_reviews(self):
+        """Without filters all reviews are returned as a plain list."""
+        self.assertEqual(
+            self.get_ids(), [self.new.pk, self.middle.pk, self.old.pk])
+
+    def test_list_fields(self):
+        """Each review has exactly the documented fields."""
+        review = self.client.get(self.list_url).data[0]
+        self.assertEqual(set(review), REVIEW_FIELDS)
+
+    def test_filter_business_user_id(self):
+        """business_user_id returns the reviews of this business user."""
+        ids = self.get_ids({'business_user_id': self.business.pk})
+        self.assertEqual(ids, [self.new.pk, self.old.pk])
+
+    def test_filter_reviewer_id(self):
+        """reviewer_id returns the reviews written by this user."""
+        ids = self.get_ids({'reviewer_id': self.customer.pk})
+        self.assertEqual(ids, [self.middle.pk, self.old.pk])
+
+    def test_ordering_rating(self):
+        """ordering sorts by rating."""
+        ids = self.get_ids({'ordering': 'rating'})
+        self.assertEqual(ids, [self.middle.pk, self.new.pk, self.old.pk])
+
+    def test_ordering_updated_at(self):
+        """ordering sorts by the date of the last change."""
+        ids = self.get_ids({'ordering': 'updated_at'})
+        self.assertEqual(ids, [self.old.pk, self.middle.pk, self.new.pk])
+
+    def test_empty_params_are_ignored(self):
+        """Empty filter values do not filter."""
+        ids = self.get_ids({'business_user_id': '', 'ordering': ''})
+        self.assertEqual(len(ids), 3)
+
+    def test_invalid_filter(self):
+        """Non-numeric IDs return 400."""
+        response = self.client.get(self.list_url, {'reviewer_id': 'abc'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_list_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class ReviewCreateTests(ReviewTestBase):
+    """Tests for POST /api/reviews/."""
+
+    def post(self, data=None):
+        """Send the review data as JSON."""
+        data = data or {'business_user': self.business.pk, 'rating': 4,
+                        'description': 'Alles war toll!'}
+        return self.client.post(self.list_url, data, format='json')
+
+    def test_create_review(self):
+        """A customer reviews a business user, he becomes the reviewer."""
+        response = self.post()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(set(response.data), REVIEW_FIELDS)
+        self.assertEqual(response.data['reviewer'], self.customer.pk)
+        self.assertEqual(Review.objects.get().business_user, self.business)
+
+    def test_reviewer_cannot_be_set(self):
+        """The reviewer always is the logged-in user."""
+        response = self.post({'business_user': self.business.pk,
+                              'rating': 4, 'reviewer': self.other_customer.pk})
+        self.assertEqual(response.data['reviewer'], self.customer.pk)
+
+    def test_second_review_is_rejected(self):
+        """A customer can review a business user only once."""
+        self.post()
+        response = self.post()
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Review.objects.count(), 1)
+
+    def test_invalid_rating(self):
+        """The rating must be between 1 and 5."""
+        for rating in [0, 6, 'gut']:
+            response = self.post(
+                {'business_user': self.business.pk, 'rating': rating})
+            self.assertEqual(
+                response.status_code, status.HTTP_400_BAD_REQUEST, rating)
+
+    def test_review_for_customer_is_rejected(self):
+        """Only business users can be reviewed."""
+        response = self.post(
+            {'business_user': self.other_customer.pk, 'rating': 4})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_review_for_unknown_user(self):
+        """An unknown business_user returns 400."""
+        response = self.post({'business_user': 999, 'rating': 4})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_as_business_user(self):
+        """Business users may not write reviews."""
+        self.client.force_authenticate(user=self.other_business)
+        response = self.post()
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.post()
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
