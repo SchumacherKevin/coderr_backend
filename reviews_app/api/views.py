@@ -3,10 +3,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListCreateAPIView
 
+from profile_app.api.permissions import IsCustomerForCreate
 from reviews_app.models import Review
 
 from .filters import ReviewFilter
-from .permissions import IsCustomerForCreate
 from .serializers import ReviewSerializer
 
 

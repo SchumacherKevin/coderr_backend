@@ -1,6 +1,8 @@
 """Custom permissions for the profile_app API."""
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
+from profile_app.models import UserProfile
+
 
 class IsOwnerOrReadOnly(BasePermission):
     """Allow reading for everyone, writing only for the profile owner."""
@@ -17,3 +19,14 @@ def has_profile_type(user, profile_type):
     profile = getattr(user, 'profile', None)
     return bool(user.is_authenticated and profile
                 and profile.type == profile_type)
+
+
+class IsCustomerForCreate(BasePermission):
+    """Logged-in users may read, only customers may create."""
+
+    def has_permission(self, request, view):
+        """Grant safe methods to logged-in users, POST only to customers."""
+        if request.method in SAFE_METHODS:
+            return bool(request.user and request.user.is_authenticated)
+        return has_profile_type(
+            request.user, UserProfile.ProfileType.CUSTOMER)

@@ -12,9 +12,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from orders_app.models import Order
+from profile_app.api.permissions import IsCustomerForCreate
 from profile_app.models import UserProfile
 
-from .permissions import IsCustomerForCreate, IsOrderBusinessUser
+from .permissions import IsOrderBusinessUser
 from .serializers import (
     OrderCreateSerializer,
     OrderSerializer,
