@@ -1,5 +1,7 @@
 """Serializers for the auth_app API."""
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 from rest_framework.authtoken.models import Token
@@ -28,12 +30,21 @@ class RegistrationSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """Ensure both password fields match."""
+        """Ensure both password fields match and the password is strong."""
         if attrs['password'] != attrs['repeated_password']:
             raise serializers.ValidationError(
                 {'repeated_password': 'Passwords do not match.'}
             )
+        self.check_password_strength(attrs)
         return attrs
+
+    def check_password_strength(self, attrs):
+        """Run Django's password validators, compared to the new user."""
+        user = User(username=attrs['username'], email=attrs['email'])
+        try:
+            validate_password(attrs['password'], user=user)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({'password': error.messages})
 
     @transaction.atomic
     def create(self, validated_data):
