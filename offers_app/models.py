@@ -16,6 +16,8 @@ class Offer(models.Model):
 
     class Meta:
         ordering = ['-updated_at']
+        verbose_name = 'Offer'
+        verbose_name_plural = 'Offers'
 
     def __str__(self):
         """String representation of the offer."""
@@ -42,6 +44,8 @@ class OfferDetail(models.Model):
     offer_type = models.CharField(max_length=10, choices=OfferType.choices)
 
     class Meta:
+        verbose_name = 'Offer detail'
+        verbose_name_plural = 'Offer details'
         constraints = [
             models.UniqueConstraint(
                 fields=['offer', 'offer_type'],

@@ -19,6 +19,8 @@ class Review(models.Model):
 
     class Meta:
         ordering = ['-updated_at']
+        verbose_name = 'Review'
+        verbose_name_plural = 'Reviews'
         constraints = [
             models.UniqueConstraint(
                 fields=['business_user', 'reviewer'],

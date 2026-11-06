@@ -33,6 +33,8 @@ class Order(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        verbose_name = 'Order'
+        verbose_name_plural = 'Orders'
 
     def __str__(self):
         """String representation of the order."""
