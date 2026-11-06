@@ -32,3 +32,23 @@ class ReviewSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 'You have already reviewed this business user.')
         return attrs
+
+
+class ReviewUpdateSerializer(serializers.ModelSerializer):
+    """Change only rating and description of a review."""
+
+    class Meta:
+        model = Review
+        fields = ['rating', 'description']
+
+    def validate(self, attrs):
+        """Reject any field other than rating and description."""
+        unknown = set(self.initial_data) - set(self.Meta.fields)
+        if unknown:
+            raise serializers.ValidationError(
+                {field: 'This field cannot be changed.' for field in unknown})
+        return attrs
+
+    def to_representation(self, instance):
+        """Return the updated review with all its fields."""
+        return ReviewSerializer(instance, context=self.context).data
