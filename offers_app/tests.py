@@ -245,6 +245,11 @@ class OfferListTests(APITestCase):
                 response.status_code, status.HTTP_400_BAD_REQUEST, param)
 
 
+def offer_detail_url(pk):
+    """Return the URL of a single offer detail."""
+    return reverse('offerdetail-detail', kwargs={'pk': pk})
+
+
 def detail_payload(offer_type, price=100, **fields):
     """Return the request data for one offer detail."""
     data = {
@@ -370,7 +375,7 @@ class OfferDetailRetrieveTests(APITestCase):
         """Create an offer and log in as a customer."""
         offer = create_offer(create_user('max'))
         self.detail = offer.details.get(offer_type='basic')
-        self.url = reverse('offerdetail-detail', kwargs={'pk': self.detail.pk})
+        self.url = offer_detail_url(self.detail.pk)
         self.client.force_authenticate(user=create_user('anna', 'customer'))
 
     def test_get_offer_detail(self):
@@ -390,8 +395,7 @@ class OfferDetailRetrieveTests(APITestCase):
 
     def test_get_unknown_offer_detail(self):
         """An unknown ID returns 404."""
-        url = reverse('offerdetail-detail', kwargs={'pk': 999})
-        response = self.client.get(url)
+        response = self.client.get(offer_detail_url(999))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_offer_detail_is_read_only(self):
