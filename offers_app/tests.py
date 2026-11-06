@@ -1,10 +1,11 @@
 """Tests for the offers_app models and API endpoints."""
+import shutil
 from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -12,6 +13,7 @@ from rest_framework.test import APITestCase
 
 from offers_app.models import Offer, OfferDetail
 from profile_app.models import UserProfile
+from profile_app.tests import TEMP_MEDIA_ROOT, create_test_image
 
 LIST_FIELDS = {
     'id', 'user', 'title', 'image', 'description', 'created_at',
@@ -250,6 +252,11 @@ def offer_detail_url(pk):
     return reverse('offerdetail-detail', kwargs={'pk': pk})
 
 
+def offer_url(pk):
+    """Return the URL of a single offer."""
+    return reverse('offer-detail', kwargs={'pk': pk})
+
+
 def detail_payload(offer_type, price=100, **fields):
     """Return the request data for one offer detail."""
     data = {
@@ -403,3 +410,188 @@ class OfferDetailRetrieveTests(APITestCase):
         response = self.client.patch(self.url, {'price': 1})
         self.assertEqual(
             response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class OfferSingleTestBase(APITestCase):
+    """Shared setup: an offer of max, logged in as max."""
+
+    def setUp(self):
+        """Create the offer and log in as its creator."""
+        self.owner = create_user('max')
+        self.offer = create_offer(self.owner)
+        self.url = offer_url(self.offer.pk)
+        self.client.force_authenticate(user=self.owner)
+
+    def login_as_other_user(self):
+        """Log in as a business user that does not own the offer."""
+        self.client.force_authenticate(user=create_user('lisa'))
+
+
+class OfferRetrieveTests(OfferSingleTestBase):
+    """Tests for GET /api/offers/{id}/."""
+
+    def test_get_offer(self):
+        """Every logged-in user gets the offer with the documented fields."""
+        self.login_as_other_user()
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(response.data), LIST_FIELDS - {'user_details'})
+        self.assertEqual(response.data['user'], self.owner.pk)
+        self.assertEqual(response.data['min_price'], 100)
+        self.assertEqual(response.data['min_delivery_time'], 5)
+
+    def test_details_contain_absolute_url(self):
+        """Details link to the offer detail endpoint with a full URL."""
+        detail = self.offer.details.get(offer_type='basic')
+        details = self.client.get(self.url).data['details']
+        expected_url = 'http://testserver' + offer_detail_url(detail.pk)
+        self.assertIn({'id': detail.pk, 'url': expected_url}, details)
+
+    def test_get_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_get_unknown_offer(self):
+        """An unknown ID returns 404."""
+        response = self.client.get(offer_url(999))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
+class OfferUpdateTests(OfferSingleTestBase):
+    """Tests for PATCH /api/offers/{id}/."""
+
+    @classmethod
+    def tearDownClass(cls):
+        """Remove the uploaded test images."""
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def patch(self, data):
+        """Send the changes as JSON."""
+        return self.client.patch(self.url, data, format='json')
+
+    def test_patch_title(self):
+        """Only the given fields change."""
+        response = self.patch({'title': 'Neuer Titel'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.offer.refresh_from_db()
+        self.assertEqual(self.offer.title, 'Neuer Titel')
+        self.assertEqual(self.offer.description, 'Professionelles Design')
+
+    def test_patch_response_contains_full_details(self):
+        """The response has all fields and the full details."""
+        data = self.patch({'title': 'Neuer Titel'}).data
+        self.assertEqual(
+            set(data), {'id', 'title', 'image', 'description', 'details'})
+        self.assertEqual(len(data['details']), 3)
+        self.assertIn('price', data['details'][0])
+
+    def test_patch_detail_keeps_id(self):
+        """A detail is found by offer_type and keeps its ID."""
+        basic = self.offer.details.get(offer_type='basic')
+        changes = detail_payload('basic', 120, title='Basic Updated',
+                                 features=['Logo Design', 'Flyer'])
+        response = self.patch({'details': [changes]})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        updated = self.offer.details.get(offer_type='basic')
+        self.assertEqual(updated.pk, basic.pk)
+        self.assertEqual(updated.title, 'Basic Updated')
+        self.assertEqual(updated.price, Decimal('120.00'))
+        self.assertEqual(OfferDetail.objects.count(), 3)
+
+    def test_patch_detail_partially(self):
+        """Fields of a detail that are not sent stay unchanged."""
+        self.patch({'details': [{'offer_type': 'premium', 'price': 450}]})
+        premium = self.offer.details.get(offer_type='premium')
+        self.assertEqual(premium.price, Decimal('450.00'))
+        self.assertEqual(premium.delivery_time_in_days, 10)
+
+    def test_patch_other_details_unchanged(self):
+        """Details that are not sent stay unchanged."""
+        self.patch({'details': [{'offer_type': 'basic', 'price': 1}]})
+        standard = self.offer.details.get(offer_type='standard')
+        self.assertEqual(standard.price, Decimal('200.00'))
+
+    def test_patch_detail_without_offer_type(self):
+        """offer_type is needed to identify the detail."""
+        response = self.patch({'details': [{'price': 1}]})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_detail_with_invalid_value(self):
+        """Invalid values in a detail return 400 and change nothing."""
+        response = self.patch({'title': 'Neu', 'details': [
+            {'offer_type': 'basic', 'price': 'teuer'}]})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.offer.refresh_from_db()
+        self.assertEqual(self.offer.title, 'Website Design')
+
+    def test_patch_duplicate_offer_type(self):
+        """The same offer_type may not appear twice."""
+        response = self.patch({'details': [
+            {'offer_type': 'basic', 'price': 1},
+            {'offer_type': 'basic', 'price': 2}]})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_upload_image(self):
+        """The frontend uploads the image as multipart in its own PATCH."""
+        response = self.client.patch(
+            self.url, {'image': create_test_image()}, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.offer.refresh_from_db()
+        self.assertTrue(self.offer.image.name.startswith('offer_images/'))
+
+    def test_patch_other_users_offer(self):
+        """Only the creator may change the offer."""
+        self.login_as_other_user()
+        response = self.patch({'title': 'Gekapert'})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_patch_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.patch({'title': 'Neu'})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_patch_unknown_offer(self):
+        """An unknown ID returns 404."""
+        response = self.client.patch(
+            offer_url(999), {'title': 'Neu'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_put_not_allowed(self):
+        """Only PATCH is supported for changes."""
+        response = self.client.put(self.url, offer_payload(), format='json')
+        self.assertEqual(
+            response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class OfferDeleteTests(OfferSingleTestBase):
+    """Tests for DELETE /api/offers/{id}/."""
+
+    def test_delete_own_offer(self):
+        """The creator deletes the offer together with its details."""
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(Offer.objects.count(), 0)
+        self.assertEqual(OfferDetail.objects.count(), 0)
+
+    def test_delete_other_users_offer(self):
+        """Only the creator may delete the offer."""
+        self.login_as_other_user()
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Offer.objects.count(), 1)
+
+    def test_delete_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_delete_unknown_offer(self):
+        """An unknown ID returns 404."""
+        response = self.client.delete(offer_url(999))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
