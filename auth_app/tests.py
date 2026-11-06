@@ -68,11 +68,22 @@ class RegistrationTests(APITestCase):
         User.objects.create_user(username='other', email='max@mail.de')
         self.assert_bad_request()
 
+    def test_weak_passwords(self):
+        """Passwords rejected by Django's validators return 400."""
+        weak = ['Ab1!', '12345678901', 'password', 'max12345']
+        for password in weak:
+            with self.subTest(password=password):
+                self.payload['password'] = password
+                self.payload['repeated_password'] = password
+                response = self.assert_bad_request()
+                self.assertIn('password', response.data)
+
     def assert_bad_request(self):
         """Post the payload and expect 400 without creating a profile."""
         response = self.client.post(self.url, self.payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(UserProfile.objects.exists())
+        return response
 
 
 class LoginTests(APITestCase):
