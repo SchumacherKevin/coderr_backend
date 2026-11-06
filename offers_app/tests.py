@@ -361,3 +361,41 @@ class OfferCreateTests(APITestCase):
         self.client.force_authenticate(user=admin)
         response = self.post(offer_payload())
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class OfferDetailRetrieveTests(APITestCase):
+    """Tests for GET /api/offerdetails/{id}/."""
+
+    def setUp(self):
+        """Create an offer and log in as a customer."""
+        offer = create_offer(create_user('max'))
+        self.detail = offer.details.get(offer_type='basic')
+        self.url = reverse('offerdetail-detail', kwargs={'pk': self.detail.pk})
+        self.client.force_authenticate(user=create_user('anna', 'customer'))
+
+    def test_get_offer_detail(self):
+        """Logged-in users get all fields of the package."""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {
+            'id': self.detail.pk, 'title': 'basic Design', 'revisions': 2,
+            'delivery_time_in_days': 5, 'price': 100,
+            'features': ['Logo Design'], 'offer_type': 'basic'})
+
+    def test_get_offer_detail_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_get_unknown_offer_detail(self):
+        """An unknown ID returns 404."""
+        url = reverse('offerdetail-detail', kwargs={'pk': 999})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_offer_detail_is_read_only(self):
+        """Offer details can only be read here, not changed."""
+        response = self.client.patch(self.url, {'price': 1})
+        self.assertEqual(
+            response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
