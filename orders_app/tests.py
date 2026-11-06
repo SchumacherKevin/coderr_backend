@@ -325,3 +325,60 @@ class OrderDeleteTests(OrderSingleTestBase):
         self.client.force_authenticate(user=self.admin)
         response = self.client.delete(order_url(999))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class OrderCountTests(OrderTestBase):
+    """Tests for GET /api/order-count/ and /api/completed-order-count/."""
+
+    def setUp(self):
+        """Create orders of max with different status."""
+        super().setUp()
+        create_order(self.customer, self.detail)
+        create_order(self.customer, self.detail)
+        create_order(self.customer, self.detail, status='completed')
+        create_order(self.customer, self.detail, status='cancelled')
+        other_detail = create_offer(create_user('lisa')).details.first()
+        create_order(self.customer, other_detail)
+
+    def get_count(self, name, user_id):
+        """Request one of the count endpoints."""
+        url = reverse(name, kwargs={'business_user_id': user_id})
+        return self.client.get(url)
+
+    def test_order_count(self):
+        """Counts the orders of the business user that are in progress."""
+        response = self.get_count('order-count', self.business.pk)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'order_count': 2})
+
+    def test_completed_order_count(self):
+        """Counts the completed orders of the business user."""
+        response = self.get_count('completed-order-count', self.business.pk)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'completed_order_count': 1})
+
+    def test_count_without_orders(self):
+        """A business user without orders has a count of 0."""
+        new_business = create_user('tom')
+        response = self.get_count('order-count', new_business.pk)
+        self.assertEqual(response.data, {'order_count': 0})
+
+    def test_count_unknown_user(self):
+        """An unknown user ID returns 404."""
+        for name in ['order-count', 'completed-order-count']:
+            response = self.get_count(name, 999)
+            self.assertEqual(
+                response.status_code, status.HTTP_404_NOT_FOUND, name)
+
+    def test_count_for_customer_id(self):
+        """The ID of a customer is not a business user, so 404."""
+        response = self.get_count('order-count', self.customer.pk)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_count_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        for name in ['order-count', 'completed-order-count']:
+            response = self.get_count(name, self.business.pk)
+            self.assertEqual(
+                response.status_code, status.HTTP_401_UNAUTHORIZED, name)
