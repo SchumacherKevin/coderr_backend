@@ -23,7 +23,15 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class OrderCreateSerializer(serializers.Serializer):
+class FullOrderResponseMixin:
+    """Answer write requests with all fields of the order."""
+
+    def to_representation(self, instance):
+        """Return the order with all its fields."""
+        return OrderSerializer(instance, context=self.context).data
+
+
+class OrderCreateSerializer(FullOrderResponseMixin, serializers.Serializer):
     """Create an order from an offer detail ID."""
 
     offer_detail_id = serializers.IntegerField(write_only=True)
@@ -38,18 +46,14 @@ class OrderCreateSerializer(serializers.Serializer):
             customer_user=self.context['request'].user,
             business_user=detail.offer.user, **copied)
 
-    def to_representation(self, instance):
-        """Return the created order with all its fields."""
-        return OrderSerializer(instance, context=self.context).data
 
-
-class OrderStatusSerializer(serializers.ModelSerializer):
+class OrderStatusSerializer(FullOrderResponseMixin,
+                            serializers.ModelSerializer):
     """Change only the status of an order."""
 
     class Meta:
         model = Order
         fields = ['status']
-        extra_kwargs = {'status': {'required': True}}
 
     def validate(self, attrs):
         """Reject a missing status and any field other than status."""
@@ -61,7 +65,3 @@ class OrderStatusSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {'status': 'This field is required.'})
         return attrs
-
-    def to_representation(self, instance):
-        """Return the updated order with all its fields."""
-        return OrderSerializer(instance, context=self.context).data
