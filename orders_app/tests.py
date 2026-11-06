@@ -33,6 +33,11 @@ def create_order(customer, offer_detail, **fields):
     )
 
 
+def order_url(pk):
+    """Return the URL of a single order."""
+    return reverse('order-detail', kwargs={'pk': pk})
+
+
 class OrderModelTests(TestCase):
     """Tests for the Order model."""
 
@@ -217,3 +222,106 @@ class OrderCreateTests(OrderTestBase):
         self.client.force_authenticate(user=None)
         response = self.post({'offer_detail_id': self.detail.pk})
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class OrderSingleTestBase(OrderTestBase):
+    """Shared setup: one order between anna and max."""
+
+    def setUp(self):
+        """Create the order and log in as its business user."""
+        super().setUp()
+        self.order = create_order(self.customer, self.detail)
+        self.url = order_url(self.order.pk)
+        self.client.force_authenticate(user=self.business)
+
+
+class OrderUpdateTests(OrderSingleTestBase):
+    """Tests for PATCH /api/orders/{id}/."""
+
+    def patch(self, data, url=None):
+        """Send the changes as JSON."""
+        return self.client.patch(url or self.url, data, format='json')
+
+    def test_business_user_updates_status(self):
+        """The business user of the order changes the status."""
+        response = self.patch({'status': 'completed'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(response.data), ORDER_FIELDS)
+        self.assertEqual(response.data['status'], 'completed')
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'completed')
+
+    def test_patch_invalid_status(self):
+        """Unknown status values return 400."""
+        response = self.patch({'status': 'done'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_without_status(self):
+        """A PATCH without status returns 400."""
+        response = self.patch({})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_other_fields(self):
+        """Fields other than status are not allowed."""
+        response = self.patch({'status': 'completed', 'price': 1})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'in_progress')
+
+    def test_patch_as_customer(self):
+        """The customer of the order may not change the status."""
+        self.client.force_authenticate(user=self.customer)
+        response = self.patch({'status': 'cancelled'})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_patch_as_other_business_user(self):
+        """Business users of other orders may not change the status."""
+        self.client.force_authenticate(user=create_user('lisa'))
+        response = self.patch({'status': 'completed'})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_patch_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.patch({'status': 'completed'})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_patch_unknown_order(self):
+        """An unknown ID returns 404."""
+        response = self.patch({'status': 'completed'}, order_url(999))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class OrderDeleteTests(OrderSingleTestBase):
+    """Tests for DELETE /api/orders/{id}/."""
+
+    def setUp(self):
+        """Additionally create a staff user."""
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin', password='Secret123!', is_staff=True)
+
+    def test_staff_deletes_order(self):
+        """Staff users delete orders."""
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_delete_as_business_user(self):
+        """Even the business user of the order may not delete it."""
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Order.objects.count(), 1)
+
+    def test_delete_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_delete_unknown_order(self):
+        """An unknown ID returns 404."""
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.delete(order_url(999))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
