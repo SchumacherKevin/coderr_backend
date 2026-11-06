@@ -23,15 +23,26 @@ from .serializers import (
 )
 
 
-def get_offer_queryset():
-    """Return offers with user, details and their minimum price and time."""
-    return Offer.objects.select_related('user').prefetch_related(
-        'details').annotate(
-            min_price=Min('details__price'),
-            min_delivery_time=Min('details__delivery_time_in_days'))
+class OfferViewMixin:
+    """Annotated offer queryset and a write serializer for changes."""
+
+    read_serializer_class = None
+
+    def get_queryset(self):
+        """Return offers with user, details and their minimum values."""
+        return Offer.objects.select_related('user').prefetch_related(
+            'details').annotate(
+                min_price=Min('details__price'),
+                min_delivery_time=Min('details__delivery_time_in_days'))
+
+    def get_serializer_class(self):
+        """Use the nested write serializer for POST and PATCH."""
+        if self.request.method in ('POST', 'PATCH'):
+            return OfferWriteSerializer
+        return self.read_serializer_class
 
 
-class OfferListView(ListCreateAPIView):
+class OfferListView(OfferViewMixin, ListCreateAPIView):
     """Public offer list with filters; business users create offers."""
 
     permission_classes = [IsBusinessUserOrReadOnly]
@@ -41,37 +52,19 @@ class OfferListView(ListCreateAPIView):
     search_fields = ['title', 'description']
     ordering_fields = ['updated_at', 'min_price']
     ordering = ['-updated_at']
-
-    def get_queryset(self):
-        """Return all offers with their calculated minimum values."""
-        return get_offer_queryset()
-
-    def get_serializer_class(self):
-        """Use the nested write serializer for POST."""
-        if self.request.method == 'POST':
-            return OfferWriteSerializer
-        return OfferListSerializer
+    read_serializer_class = OfferListSerializer
 
     def perform_create(self, serializer):
         """The logged-in business user becomes the creator."""
         serializer.save(user=self.request.user)
 
 
-class OfferSingleView(RetrieveUpdateDestroyAPIView):
+class OfferSingleView(OfferViewMixin, RetrieveUpdateDestroyAPIView):
     """Read an offer; only its creator may update or delete it."""
 
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
     http_method_names = ['get', 'patch', 'delete', 'head', 'options']
-
-    def get_queryset(self):
-        """Return all offers with their calculated minimum values."""
-        return get_offer_queryset()
-
-    def get_serializer_class(self):
-        """Use the nested write serializer for PATCH."""
-        if self.request.method == 'PATCH':
-            return OfferWriteSerializer
-        return OfferRetrieveSerializer
+    read_serializer_class = OfferRetrieveSerializer
 
 
 class OfferDetailView(RetrieveAPIView):
