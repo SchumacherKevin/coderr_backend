@@ -120,14 +120,14 @@ class OfferWriteSerializer(serializers.ModelSerializer):
         """Update the offer and the sent details, found by offer_type."""
         details = validated_data.pop('details', [])
         instance = super().update(instance, validated_data)
+        existing = {d.offer_type: d for d in instance.details.all()}
         for detail_data in details:
-            self.update_detail(instance, detail_data)
+            self.update_detail(existing, detail_data)
         return instance
 
-    def update_detail(self, offer, detail_data):
+    def update_detail(self, existing, detail_data):
         """Overwrite the sent fields of one detail, its ID stays the same."""
-        detail = offer.details.filter(
-            offer_type=detail_data['offer_type']).first()
+        detail = existing.get(detail_data['offer_type'])
         if detail is None:
             raise serializers.ValidationError(
                 {'details': 'This offer has no detail of this offer_type.'})

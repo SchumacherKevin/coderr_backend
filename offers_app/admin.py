@@ -25,3 +25,4 @@ class OfferDetailAdmin(admin.ModelAdmin):
 
     list_display = ('offer', 'offer_type', 'price', 'delivery_time_in_days')
     list_filter = ('offer_type',)
+    list_select_related = ('offer__user',)
