@@ -243,3 +243,121 @@ class OfferListTests(APITestCase):
             response = self.client.get(self.url, {param: 'abc'})
             self.assertEqual(
                 response.status_code, status.HTTP_400_BAD_REQUEST, param)
+
+
+def detail_payload(offer_type, price=100, **fields):
+    """Return the request data for one offer detail."""
+    data = {
+        'title': f'{offer_type.title()} Design', 'revisions': 2,
+        'delivery_time_in_days': 5, 'price': price,
+        'features': ['Logo Design', 'Visitenkarte'],
+        'offer_type': offer_type,
+    }
+    data.update(fields)
+    return data
+
+
+def offer_payload():
+    """Return valid request data for an offer with three details."""
+    return {
+        'title': 'Grafikdesign-Paket',
+        'image': None,
+        'description': 'Ein umfassendes Grafikdesign-Paket.',
+        'details': [
+            detail_payload('basic'),
+            detail_payload('standard', 200, revisions=5),
+            detail_payload('premium', 500, revisions=-1),
+        ],
+    }
+
+
+class OfferCreateTests(APITestCase):
+    """Tests for POST /api/offers/."""
+
+    def setUp(self):
+        """Log in as a business user."""
+        self.url = reverse('offer-list')
+        self.business = create_user('max')
+        self.client.force_authenticate(user=self.business)
+
+    def post(self, data):
+        """Send the offer data as JSON."""
+        return self.client.post(self.url, data, format='json')
+
+    def test_create_offer(self):
+        """A business user creates an offer with three details."""
+        response = self.post(offer_payload())
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        offer = Offer.objects.get()
+        self.assertEqual(offer.user, self.business)
+        self.assertEqual(offer.details.count(), 3)
+
+    def test_create_response_format(self):
+        """The response contains the offer and full details with IDs."""
+        data = self.post(offer_payload()).data
+        self.assertEqual(
+            set(data), {'id', 'title', 'image', 'description', 'details'})
+        detail = data['details'][0]
+        self.assertEqual(set(detail), {
+            'id', 'title', 'revisions', 'delivery_time_in_days', 'price',
+            'features', 'offer_type'})
+        self.assertEqual(detail['price'], 100)
+        self.assertEqual(detail['features'], ['Logo Design', 'Visitenkarte'])
+
+    def test_create_without_details(self):
+        """An offer without details is rejected."""
+        data = offer_payload()
+        del data['details']
+        self.assertEqual(
+            self.post(data).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_with_two_details(self):
+        """An offer needs exactly three details."""
+        data = offer_payload()
+        data['details'].pop()
+        response = self.post(data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Offer.objects.count(), 0)
+
+    def test_create_with_duplicate_offer_type(self):
+        """basic, standard and premium must each appear once."""
+        data = offer_payload()
+        data['details'][2]['offer_type'] = 'basic'
+        self.assertEqual(
+            self.post(data).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_with_invalid_detail(self):
+        """A detail with missing price or invalid values is rejected."""
+        data = offer_payload()
+        del data['details'][0]['price']
+        data['details'][1]['features'] = 'kein Array'
+        response = self.post(data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(OfferDetail.objects.count(), 0)
+
+    def test_create_without_title(self):
+        """The title is required."""
+        data = offer_payload()
+        del data['title']
+        self.assertEqual(
+            self.post(data).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_unauthenticated(self):
+        """Anonymous users get 401."""
+        self.client.force_authenticate(user=None)
+        response = self.post(offer_payload())
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_create_as_customer(self):
+        """Customers are not allowed to create offers."""
+        self.client.force_authenticate(user=create_user('anna', 'customer'))
+        response = self.post(offer_payload())
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Offer.objects.count(), 0)
+
+    def test_create_as_user_without_profile(self):
+        """Users without a profile (e.g. admins) get 403."""
+        admin = User.objects.create_user(username='admin', password='x')
+        self.client.force_authenticate(user=admin)
+        response = self.post(offer_payload())
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
