@@ -2,14 +2,14 @@
 from django.db.models import Min
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.generics import ListAPIView
-from rest_framework.permissions import AllowAny
+from rest_framework.generics import ListCreateAPIView
 
 from offers_app.models import Offer
 
 from .filters import OfferFilter
 from .pagination import OfferPagination
-from .serializers import OfferListSerializer
+from .permissions import IsBusinessUserOrReadOnly
+from .serializers import OfferListSerializer, OfferWriteSerializer
 
 
 def get_offer_queryset():
@@ -20,11 +20,10 @@ def get_offer_queryset():
             min_delivery_time=Min('details__delivery_time_in_days'))
 
 
-class OfferListView(ListAPIView):
-    """Public, paginated list of offers with filters, search and ordering."""
+class OfferListView(ListCreateAPIView):
+    """Public offer list with filters; business users create offers."""
 
-    serializer_class = OfferListSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsBusinessUserOrReadOnly]
     pagination_class = OfferPagination
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = OfferFilter
@@ -35,3 +34,13 @@ class OfferListView(ListAPIView):
     def get_queryset(self):
         """Return all offers with their calculated minimum values."""
         return get_offer_queryset()
+
+    def get_serializer_class(self):
+        """Use the nested write serializer for POST."""
+        if self.request.method == 'POST':
+            return OfferWriteSerializer
+        return OfferListSerializer
+
+    def perform_create(self, serializer):
+        """The logged-in business user becomes the creator."""
+        serializer.save(user=self.request.user)
