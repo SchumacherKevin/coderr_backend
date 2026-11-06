@@ -1,12 +1,8 @@
 """Custom permissions for the offers_app API."""
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
-
-def is_business_user(user):
-    """Return True if the user is logged in and has a business profile."""
-    profile = getattr(user, 'profile', None)
-    return bool(user.is_authenticated and profile
-                and profile.type == 'business')
+from profile_app.api.permissions import has_profile_type
+from profile_app.models import UserProfile
 
 
 class IsBusinessUserOrReadOnly(BasePermission):
@@ -16,4 +12,5 @@ class IsBusinessUserOrReadOnly(BasePermission):
         """Grant safe methods to all, others only to business users."""
         if request.method in SAFE_METHODS:
             return True
-        return is_business_user(request.user)
+        return has_profile_type(
+            request.user, UserProfile.ProfileType.BUSINESS)

@@ -10,3 +10,10 @@ class IsOwnerOrReadOnly(BasePermission):
         if request.method in SAFE_METHODS:
             return True
         return obj.user == request.user
+
+
+def has_profile_type(user, profile_type):
+    """Return True if the user is logged in and has this profile type."""
+    profile = getattr(user, 'profile', None)
+    return bool(user.is_authenticated and profile
+                and profile.type == profile_type)
