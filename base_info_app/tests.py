@@ -50,6 +50,5 @@ class BaseInfoTests(APITestCase):
     def test_post_not_allowed(self):
         """The endpoint only supports GET."""
         response = self.client.post(self.url, {})
-        self.assertIn(response.status_code, (
-            status.HTTP_401_UNAUTHORIZED,
-            status.HTTP_405_METHOD_NOT_ALLOWED))
+        self.assertEqual(
+            response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)

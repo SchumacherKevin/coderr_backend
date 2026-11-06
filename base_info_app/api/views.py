@@ -9,6 +9,12 @@ from profile_app.models import UserProfile
 from reviews_app.models import Review
 
 
+def get_average_rating():
+    """Average of all ratings with one decimal place, 0 without reviews."""
+    average = Review.objects.aggregate(avg=Avg('rating'))['avg']
+    return round(average or 0, 1)
+
+
 class BaseInfoView(APIView):
     """Public statistics about reviews, business users and offers."""
 
@@ -16,10 +22,9 @@ class BaseInfoView(APIView):
 
     def get(self, request):
         """Return the counts and the average rating."""
-        average = Review.objects.aggregate(avg=Avg('rating'))['avg'] or 0
         return Response({
             'review_count': Review.objects.count(),
-            'average_rating': round(average, 1),
+            'average_rating': get_average_rating(),
             'business_profile_count': UserProfile.objects.filter(
                 type=UserProfile.ProfileType.BUSINESS).count(),
             'offer_count': Offer.objects.count(),
