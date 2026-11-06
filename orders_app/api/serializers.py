@@ -41,3 +41,27 @@ class OrderCreateSerializer(serializers.Serializer):
     def to_representation(self, instance):
         """Return the created order with all its fields."""
         return OrderSerializer(instance, context=self.context).data
+
+
+class OrderStatusSerializer(serializers.ModelSerializer):
+    """Change only the status of an order."""
+
+    class Meta:
+        model = Order
+        fields = ['status']
+        extra_kwargs = {'status': {'required': True}}
+
+    def validate(self, attrs):
+        """Reject a missing status and any field other than status."""
+        unknown = set(self.initial_data) - {'status'}
+        if unknown:
+            raise serializers.ValidationError(
+                {field: 'This field cannot be changed.' for field in unknown})
+        if 'status' not in attrs:
+            raise serializers.ValidationError(
+                {'status': 'This field is required.'})
+        return attrs
+
+    def to_representation(self, instance):
+        """Return the updated order with all its fields."""
+        return OrderSerializer(instance, context=self.context).data

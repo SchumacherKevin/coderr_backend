@@ -1,11 +1,20 @@
 """Views for the orders_app API."""
 from django.db.models import Q
-from rest_framework.generics import ListCreateAPIView
+from rest_framework.generics import (
+    DestroyAPIView,
+    ListCreateAPIView,
+    UpdateAPIView,
+)
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 
 from orders_app.models import Order
 
-from .permissions import IsCustomerForCreate
-from .serializers import OrderCreateSerializer, OrderSerializer
+from .permissions import IsCustomerForCreate, IsOrderBusinessUser
+from .serializers import (
+    OrderCreateSerializer,
+    OrderSerializer,
+    OrderStatusSerializer,
+)
 
 
 class OrderListView(ListCreateAPIView):
@@ -24,3 +33,17 @@ class OrderListView(ListCreateAPIView):
         if self.request.method == 'POST':
             return OrderCreateSerializer
         return OrderSerializer
+
+
+class OrderSingleView(UpdateAPIView, DestroyAPIView):
+    """Business user changes the status, staff deletes orders."""
+
+    queryset = Order.objects.all()
+    serializer_class = OrderStatusSerializer
+    http_method_names = ['patch', 'delete', 'options']
+
+    def get_permissions(self):
+        """DELETE only for staff, PATCH only for the order's business user."""
+        if self.request.method == 'DELETE':
+            return [IsAuthenticated(), IsAdminUser()]
+        return [IsAuthenticated(), IsOrderBusinessUser()]

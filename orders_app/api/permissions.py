@@ -14,3 +14,11 @@ class IsCustomerForCreate(BasePermission):
             return bool(request.user and request.user.is_authenticated)
         return has_profile_type(
             request.user, UserProfile.ProfileType.CUSTOMER)
+
+
+class IsOrderBusinessUser(BasePermission):
+    """Only the business user of the order may change it."""
+
+    def has_object_permission(self, request, view, obj):
+        """Grant access if the user received this order."""
+        return obj.business_user == request.user
