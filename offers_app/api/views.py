@@ -12,6 +12,14 @@ from .pagination import OfferPagination
 from .serializers import OfferListSerializer
 
 
+def get_offer_queryset():
+    """Return offers with user, details and their minimum price and time."""
+    return Offer.objects.select_related('user').prefetch_related(
+        'details').annotate(
+            min_price=Min('details__price'),
+            min_delivery_time=Min('details__delivery_time_in_days'))
+
+
 class OfferListView(ListAPIView):
     """Public, paginated list of offers with filters, search and ordering."""
 
@@ -26,7 +34,4 @@ class OfferListView(ListAPIView):
 
     def get_queryset(self):
         """Return all offers with their calculated minimum values."""
-        return Offer.objects.select_related('user').prefetch_related(
-            'details').annotate(
-                min_price=Min('details__price'),
-                min_delivery_time=Min('details__delivery_time_in_days'))
+        return get_offer_queryset()
