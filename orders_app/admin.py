@@ -1,3 +1,4 @@
+"""Admin configuration of orders_app."""
 from django.contrib import admin
 
 from .models import Order

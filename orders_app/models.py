@@ -1,3 +1,4 @@
+"""Models of orders_app."""
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -8,6 +9,8 @@ class Order(models.Model):
     """An order with a copy of the package data at the time of ordering."""
 
     class Status(models.TextChoices):
+        """Processing states of an order."""
+
         IN_PROGRESS = 'in_progress', 'In progress'
         COMPLETED = 'completed', 'Completed'
         CANCELLED = 'cancelled', 'Cancelled'

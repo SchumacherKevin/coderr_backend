@@ -1,3 +1,4 @@
+"""Admin configuration of profile_app."""
 from django.contrib import admin
 
 from .models import UserProfile

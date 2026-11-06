@@ -1,3 +1,4 @@
+"""Models of profile_app."""
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -6,6 +7,8 @@ class UserProfile(models.Model):
     """Extends the Django user with Coderr-specific profile data."""
 
     class ProfileType(models.TextChoices):
+        """The two kinds of users on Coderr."""
+
         CUSTOMER = 'customer', 'Customer'
         BUSINESS = 'business', 'Business'
 

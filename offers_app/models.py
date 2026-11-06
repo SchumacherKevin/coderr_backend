@@ -1,3 +1,4 @@
+"""Models of offers_app."""
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -25,6 +26,8 @@ class OfferDetail(models.Model):
     """One package (basic, standard or premium) of an offer."""
 
     class OfferType(models.TextChoices):
+        """The three package levels of an offer."""
+
         BASIC = 'basic', 'Basic'
         STANDARD = 'standard', 'Standard'
         PREMIUM = 'premium', 'Premium'

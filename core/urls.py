@@ -1,3 +1,4 @@
+"""Central URL routing: admin, all app APIs under api/ and media files."""
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
