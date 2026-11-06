@@ -2,14 +2,19 @@
 from django.db.models import Min
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.generics import ListCreateAPIView
+from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
+from rest_framework.permissions import IsAuthenticated
 
-from offers_app.models import Offer
+from offers_app.models import Offer, OfferDetail
 
 from .filters import OfferFilter
 from .pagination import OfferPagination
 from .permissions import IsBusinessUserOrReadOnly
-from .serializers import OfferListSerializer, OfferWriteSerializer
+from .serializers import (
+    OfferDetailSerializer,
+    OfferListSerializer,
+    OfferWriteSerializer,
+)
 
 
 def get_offer_queryset():
@@ -44,3 +49,11 @@ class OfferListView(ListCreateAPIView):
     def perform_create(self, serializer):
         """The logged-in business user becomes the creator."""
         serializer.save(user=self.request.user)
+
+
+class OfferDetailView(RetrieveAPIView):
+    """Read a single package of an offer."""
+
+    queryset = OfferDetail.objects.all()
+    serializer_class = OfferDetailSerializer
+    permission_classes = [IsAuthenticated]
