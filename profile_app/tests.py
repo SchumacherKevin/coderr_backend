@@ -11,6 +11,7 @@ from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from core.testing import AdminQueryCountMixin
 from profile_app.models import UserProfile
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp()
@@ -236,3 +237,36 @@ class ProfileListTests(APITestCase):
         self.client.force_authenticate(user=None)
         response = self.client.get(self.customer_url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class ProfileQueryCountTests(AdminQueryCountMixin, APITestCase):
+    """Profile lists and profile admin do not run one query per profile."""
+
+    def setUp(self):
+        """Create one profile of each type and log in as the customer."""
+        create_user_with_profile('max', 'business')
+        customer = create_user_with_profile('anna', 'customer')
+        self.business_url = reverse('business-profile-list')
+        self.customer_url = reverse('customer-profile-list')
+        self.client.force_authenticate(user=customer)
+
+    def create_profiles(self):
+        """Create one more business and one more customer profile."""
+        number = UserProfile.objects.count()
+        create_user_with_profile(f'business{number}', 'business')
+        create_user_with_profile(f'customer{number}', 'customer')
+
+    def test_business_list(self):
+        """More profiles do not add queries to the business list."""
+        self.assert_queries_constant(self.business_url, self.create_profiles)
+
+    def test_customer_list(self):
+        """More profiles do not add queries to the customer list."""
+        self.assert_queries_constant(self.customer_url, self.create_profiles)
+
+    def test_profile_changelist(self):
+        """More profiles do not add queries to the admin profile list."""
+        self.login_as_admin()
+        self.assert_queries_constant(
+            reverse('admin:profile_app_userprofile_changelist'),
+            self.create_profiles)

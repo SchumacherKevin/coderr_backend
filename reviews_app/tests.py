@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from core.testing import AdminQueryCountMixin
 from offers_app.tests import create_user
 from reviews_app.models import Review
 
@@ -329,3 +330,28 @@ class ReviewDeleteTests(ReviewSingleTestBase):
         """An unknown ID returns 404."""
         response = self.client.delete(review_url(999))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class ReviewQueryCountTests(AdminQueryCountMixin, ReviewTestBase):
+    """Review list and review admin do not run one query per review."""
+
+    def setUp(self):
+        """Create one review of anna."""
+        super().setUp()
+        create_review(self.business, self.customer)
+
+    def create_review(self):
+        """Create a review of a new customer."""
+        customer = create_user(f'customer{Review.objects.count()}', 'customer')
+        create_review(self.business, customer)
+
+    def test_review_list(self):
+        """More reviews do not add queries to the review list."""
+        self.assert_queries_constant(self.list_url, self.create_review)
+
+    def test_review_changelist(self):
+        """More reviews do not add queries to the admin review list."""
+        self.login_as_admin()
+        self.assert_queries_constant(
+            reverse('admin:reviews_app_review_changelist'),
+            self.create_review)

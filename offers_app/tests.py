@@ -4,13 +4,15 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from core.testing import AdminQueryCountMixin, QueryCountMixin
 from offers_app.models import Offer, OfferDetail
 from profile_app.models import UserProfile
 from profile_app.tests import TEMP_MEDIA_ROOT, create_test_image
@@ -595,3 +597,58 @@ class OfferDeleteTests(OfferSingleTestBase):
         """An unknown ID returns 404."""
         response = self.client.delete(offer_url(999))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+def create_offer_of_new_user():
+    """Create an offer of a new business user for the query count tests."""
+    return create_offer(create_user(f'user{User.objects.count()}'), 'Logo')
+
+
+class OfferQueryCountTests(QueryCountMixin, APITestCase):
+    """The offer endpoints do not run one query per offer or detail."""
+
+    def setUp(self):
+        """Create one offer and log in as its creator."""
+        self.owner = create_user('max')
+        self.offer = create_offer(self.owner)
+        self.client.force_authenticate(user=self.owner)
+
+    def test_offer_list(self):
+        """More offers of other users do not add queries."""
+        self.assert_queries_constant(
+            reverse('offer-list'), create_offer_of_new_user)
+
+    def count_patch_queries(self, offer_types):
+        """PATCH the price of the given details, return the query count."""
+        details = [{'offer_type': t, 'price': 300} for t in offer_types]
+        with CaptureQueriesContext(connection) as context:
+            self.client.patch(offer_url(self.offer.pk),
+                              {'details': details}, format='json')
+        return len(context)
+
+    def test_patch_details_only_adds_updates(self):
+        """Each further detail in a PATCH costs only its own UPDATE."""
+        one = self.count_patch_queries(['basic'])
+        three = self.count_patch_queries(['basic', 'standard', 'premium'])
+        self.assertEqual(three - one, 2)
+
+
+class OfferAdminQueryCountTests(AdminQueryCountMixin, TestCase):
+    """The offer admin lists do not run one query per row."""
+
+    def setUp(self):
+        """Log in as admin and create one offer."""
+        self.login_as_admin()
+        create_offer_of_new_user()
+
+    def test_offer_changelist(self):
+        """More offers do not add queries to the offer list."""
+        self.assert_queries_constant(
+            reverse('admin:offers_app_offer_changelist'),
+            create_offer_of_new_user)
+
+    def test_offerdetail_changelist(self):
+        """More offers do not add queries to the offer detail list."""
+        self.assert_queries_constant(
+            reverse('admin:offers_app_offerdetail_changelist'),
+            create_offer_of_new_user)

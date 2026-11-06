@@ -8,6 +8,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from core.testing import AdminQueryCountMixin
 from offers_app.tests import create_offer, create_user
 from orders_app.models import Order
 
@@ -382,3 +383,26 @@ class OrderCountTests(OrderTestBase):
             response = self.get_count(name, self.business.pk)
             self.assertEqual(
                 response.status_code, status.HTTP_401_UNAUTHORIZED, name)
+
+
+class OrderQueryCountTests(AdminQueryCountMixin, OrderTestBase):
+    """Order list and order admin do not run one query per order."""
+
+    def setUp(self):
+        """Create one order of the customer anna."""
+        super().setUp()
+        create_order(self.customer, self.detail)
+
+    def create_order(self):
+        """Create another order of anna."""
+        create_order(self.customer, self.detail)
+
+    def test_order_list(self):
+        """More orders do not add queries to the order list."""
+        self.assert_queries_constant(self.list_url, self.create_order)
+
+    def test_order_changelist(self):
+        """More orders do not add queries to the admin order list."""
+        self.login_as_admin()
+        self.assert_queries_constant(
+            reverse('admin:orders_app_order_changelist'), self.create_order)
