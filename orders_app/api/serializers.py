@@ -56,6 +56,14 @@ class OrderStatusSerializer(FullOrderResponseMixin, RejectUnknownFieldsMixin,
         model = Order
         fields = ['status']
 
+    def validate_status(self, value):
+        """A completed or cancelled order keeps its status."""
+        current = self.instance.status
+        if current != Order.Status.IN_PROGRESS and value != current:
+            raise serializers.ValidationError(
+                f'A {current} order cannot be changed anymore.')
+        return value
+
     def validate(self, attrs):
         """Reject other fields and a missing status."""
         attrs = super().validate(attrs)

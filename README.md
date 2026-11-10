@@ -192,7 +192,7 @@ Query parameters for `GET /api/offers/`:
 | ------ | -------- | ----------- | ------ |
 | GET | `/api/orders/` | Orders where the user is customer or business user | Authenticated |
 | POST | `/api/orders/` | Order an offer package (`offer_detail_id`) | Customers |
-| PATCH | `/api/orders/{id}/` | Change the status (`in_progress`, `completed`, `cancelled`) | Business user of the order |
+| PATCH | `/api/orders/{id}/` | Change the status (`in_progress`, `completed`, `cancelled`); completed and cancelled orders are final | Business user of the order |
 | DELETE | `/api/orders/{id}/` | Delete an order | Staff users |
 | GET | `/api/order-count/{business_user_id}/` | Number of orders in progress | Authenticated |
 | GET | `/api/completed-order-count/{business_user_id}/` | Number of completed orders | Authenticated |
@@ -220,7 +220,7 @@ and `ordering` (`updated_at` or `rating`, prefix `-` for descending).
 | Code | Meaning |
 | ---- | ------- |
 | 200 / 201 / 204 | Success |
-| 400 | Invalid data (also unknown fields in the request body) |
+| 400 | Invalid data (also unknown or read-only fields in a PATCH body) |
 | 401 | Not authenticated |
 | 403 | Authenticated, but not allowed (wrong user type or not the owner) |
 | 404 | Object not found |
@@ -241,7 +241,7 @@ as well.
 
 ```
 coderr_backend/
-├── core/               # Settings, root URLs, test settings and test helpers
+├── core/               # Settings, root URLs, shared permissions, test helpers
 ├── auth_app/           # Registration, login, create_guest_users command
 ├── profile_app/        # User profiles (customer / business)
 ├── offers_app/         # Offers and offer details, filters, pagination
@@ -262,3 +262,7 @@ Every app keeps its API code in an `api/` package (`serializers.py`,
 - Uploaded files are stored in `media/` and served by `runserver` while
   `DEBUG=True`.
 - Prices are returned as numbers, not strings (`COERCE_DECIMAL_TO_STRING = False`).
+- Offer details: `price` must be 0 or more, `delivery_time_in_days` at least 1
+  and `revisions` at least -1 (`-1` means unlimited revisions).
+- Registration, login and base info ignore the `Authorization` header, so an
+  outdated token stored in the frontend does not block them.

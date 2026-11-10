@@ -76,6 +76,12 @@ class OfferDetailSerializer(serializers.ModelSerializer):
             'id', 'title', 'revisions', 'delivery_time_in_days', 'price',
             'features', 'offer_type',
         ]
+        # -1 revisions means unlimited, the frontend sends it that way
+        extra_kwargs = {
+            'price': {'min_value': 0},
+            'delivery_time_in_days': {'min_value': 1},
+            'revisions': {'min_value': -1},
+        }
 
 
 class OfferWriteSerializer(serializers.ModelSerializer):

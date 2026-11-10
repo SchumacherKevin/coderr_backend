@@ -3,10 +3,12 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from rest_framework import serializers
 
+from core.serializers import RejectUnknownFieldsMixin
 from profile_app.models import UserProfile
 
 
-class ProfileSerializer(serializers.ModelSerializer):
+class ProfileSerializer(RejectUnknownFieldsMixin,
+                        serializers.ModelSerializer):
     """Profile data combined with the related user fields."""
 
     username = serializers.CharField(source='user.username', read_only=True)

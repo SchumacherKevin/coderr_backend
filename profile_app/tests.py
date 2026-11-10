@@ -117,14 +117,23 @@ class ProfileUpdateTests(ProfileTestBase):
         self.assertEqual(self.owner.email, 'new@mail.de')
         self.assertEqual(self.owner.profile.location, 'Berlin')
 
-    def test_patch_read_only_fields_are_ignored(self):
-        """Username and type cannot be changed via PATCH."""
+    def test_patch_read_only_fields_are_rejected(self):
+        """Username and type cannot be changed, PATCH returns 400."""
         payload = {'username': 'hacker', 'type': 'customer'}
         response = self.client.patch(self.url, payload, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(set(response.data), {'username', 'type'})
         self.owner.refresh_from_db()
         self.assertEqual(self.owner.username, 'max')
         self.assertEqual(self.owner.profile.type, 'business')
+
+    def test_patch_unknown_field(self):
+        """Fields the profile does not have return 400."""
+        payload = {'tel': '123', 'hobby': 'Chess'}
+        response = self.client.patch(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.owner.profile.refresh_from_db()
+        self.assertEqual(self.owner.profile.tel, '')
 
     def test_patch_upload_image(self):
         """A profile picture can be uploaded as multipart form data."""

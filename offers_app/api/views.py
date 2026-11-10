@@ -9,8 +9,8 @@ from rest_framework.generics import (
 )
 from rest_framework.permissions import IsAuthenticated
 
+from core.permissions import IsOwnerOrReadOnly
 from offers_app.models import Offer, OfferDetail
-from profile_app.api.permissions import IsOwnerOrReadOnly
 
 from .filters import OfferFilter
 from .pagination import OfferPagination

@@ -369,6 +369,33 @@ class OfferCreateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(Offer.objects.count(), 0)
 
+    def assert_detail_rejected(self, **fields):
+        """A basic detail with these values must return 400."""
+        data = offer_payload()
+        data['details'][0].update(fields)
+        response = self.post(data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Offer.objects.count(), 0)
+
+    def test_create_with_negative_price(self):
+        """A negative price is rejected."""
+        self.assert_detail_rejected(price=-50)
+
+    def test_create_with_zero_delivery_time(self):
+        """The delivery time needs at least one day."""
+        self.assert_detail_rejected(delivery_time_in_days=0)
+
+    def test_create_with_revisions_below_minus_one(self):
+        """-1 means unlimited revisions, lower values are rejected."""
+        self.assert_detail_rejected(revisions=-2)
+
+    def test_create_with_zero_price_and_unlimited_revisions(self):
+        """Price 0 and -1 revisions (unlimited) are allowed."""
+        data = offer_payload()
+        data['details'][0].update(price=0, revisions=-1)
+        response = self.post(data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
     def test_create_as_user_without_profile(self):
         """Users without a profile (e.g. admins) get 403."""
         admin = User.objects.create_user(username='admin', password='x')
@@ -474,6 +501,11 @@ class OfferUpdateTests(OfferSingleTestBase):
     def patch(self, data):
         """Send the changes as JSON."""
         return self.client.patch(self.url, data, format='json')
+
+    def test_patch_detail_with_negative_price(self):
+        """The limits for detail values also apply to PATCH."""
+        response = self.patch({'details': [detail_payload('basic', -1)]})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_patch_title(self):
         """Only the given fields change."""

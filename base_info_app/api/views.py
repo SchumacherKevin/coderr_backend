@@ -18,6 +18,7 @@ def get_average_rating():
 class BaseInfoView(APIView):
     """Public statistics about reviews, business users and offers."""
 
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def get(self, request):

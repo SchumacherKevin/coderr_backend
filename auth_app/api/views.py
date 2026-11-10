@@ -23,6 +23,7 @@ def build_auth_response(user):
 class RegistrationView(APIView):
     """Register a new customer or business user."""
 
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -36,6 +37,8 @@ class RegistrationView(APIView):
 
 class LoginView(ObtainAuthToken):
     """Log a user in with username and password."""
+
+    authentication_classes = []
 
     def post(self, request, *args, **kwargs):
         """Validate the credentials and return token and basic user data."""

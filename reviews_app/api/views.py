@@ -8,7 +8,7 @@ from rest_framework.generics import (
 )
 from rest_framework.permissions import IsAuthenticated
 
-from profile_app.api.permissions import IsCustomerForCreate
+from core.permissions import IsCustomerForCreate
 from reviews_app.models import Review
 
 from .filters import ReviewFilter

@@ -2,9 +2,9 @@
 from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 
+from core.permissions import IsOwnerOrReadOnly
 from profile_app.models import UserProfile
 
-from .permissions import IsOwnerOrReadOnly
 from .serializers import (
     BusinessProfileListSerializer,
     CustomerProfileListSerializer,

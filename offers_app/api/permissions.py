@@ -1,7 +1,7 @@
 """Custom permissions for the offers_app API."""
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
-from profile_app.api.permissions import has_profile_type
+from core.permissions import has_profile_type
 from profile_app.models import UserProfile
 
 

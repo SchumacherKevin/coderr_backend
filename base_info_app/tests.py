@@ -47,6 +47,12 @@ class BaseInfoTests(APITestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.data['average_rating'], 3.3)
 
+    def test_stale_token_is_ignored(self):
+        """An old token in the header does not block the public endpoint."""
+        self.client.credentials(HTTP_AUTHORIZATION='Token invalid')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
     def test_post_not_allowed(self):
         """The endpoint only supports GET."""
         response = self.client.post(self.url, {})

@@ -58,6 +58,12 @@ class RegistrationTests(APITestCase):
         self.payload['type'] = 'admin'
         self.assert_bad_request()
 
+    def test_registration_with_stale_token(self):
+        """An old token in the header does not block the registration."""
+        self.client.credentials(HTTP_AUTHORIZATION='Token invalid')
+        response = self.client.post(self.url, self.payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
     def test_duplicate_username(self):
         """An existing username returns 400."""
         User.objects.create_user(username='max', email='other@mail.de')
@@ -116,6 +122,13 @@ class LoginTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         new_token = Token.objects.get(user=self.user)
         self.assertEqual(response.data['token'], new_token.key)
+
+    def test_login_with_stale_token(self):
+        """An old token in the header does not block the login."""
+        self.client.credentials(HTTP_AUTHORIZATION='Token invalid')
+        response = self.client.post(self.url, self.payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['token'], self.token.key)
 
     def test_wrong_password(self):
         """A wrong password returns 400."""

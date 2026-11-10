@@ -262,6 +262,31 @@ class OrderUpdateTests(OrderSingleTestBase):
         response = self.patch({})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def assert_status_is_final(self, final_status):
+        """A finished order cannot get another status."""
+        self.order.status = final_status
+        self.order.save()
+        for new_status in ('in_progress', 'completed', 'cancelled'):
+            if new_status != final_status:
+                response = self.patch({'status': new_status})
+                self.assertEqual(
+                    response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, final_status)
+
+    def test_completed_order_is_final(self):
+        """A completed order keeps its status."""
+        self.assert_status_is_final('completed')
+
+    def test_cancelled_order_is_final(self):
+        """A cancelled order keeps its status."""
+        self.assert_status_is_final('cancelled')
+
+    def test_in_progress_can_be_cancelled(self):
+        """A running order can still be cancelled."""
+        response = self.patch({'status': 'cancelled'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
     def test_patch_other_fields(self):
         """Fields other than status are not allowed."""
         response = self.patch({'status': 'completed', 'price': 1})

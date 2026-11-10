@@ -11,8 +11,8 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.permissions import IsCustomerForCreate
 from orders_app.models import Order
-from profile_app.api.permissions import IsCustomerForCreate
 from profile_app.models import UserProfile
 
 from .permissions import IsOrderBusinessUser
